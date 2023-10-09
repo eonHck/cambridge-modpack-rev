@@ -1,0 +1,193 @@
+local Object = require 'libs.classic'
+
+local PieceRev = Object:extend()
+
+function PieceRev:new(shape, rotation, position, block_offsets, gravity, lock_delay, skin, colour, big)
+	self.shape = shape
+	self.rotation = rotation
+	self.position = position
+	self.block_offsets = block_offsets
+	self.gravity = gravity
+	self.lock_delay = lock_delay
+	self.skin = skin
+	self.colour = colour
+	self.ghost = false
+	self.locked = false
+	self.big = big
+end
+
+-- Functions that return a new piece to test in rotation systems.
+
+function PieceRev:withOffset(offset)
+	return PieceRev(
+		self.shape, self.rotation,
+		{x = self.position.x + offset.x, y = self.position.y + offset.y},
+		self.block_offsets, self.gravity, self.lock_delay, self.skin, self.colour, self.big
+	)
+end
+
+function PieceRev:withRelativeRotation(rot)
+	local new_rot = self.rotation + rot
+	while new_rot < 0 do new_rot = new_rot + 4 end
+	while new_rot >= 4 do new_rot = new_rot - 4 end
+	return PieceRev(
+		self.shape, new_rot, self.position,
+		self.block_offsets, self.gravity, self.lock_delay, self.skin, self.colour, self.big
+	)
+end
+
+-- Functions that return predicates relative to a grid.
+
+function PieceRev:getBlockOffsets()
+	return self.block_offsets[self.shape][self.rotation + 1]
+end
+
+function PieceRev:occupiesSquare(x, y)
+	local offsets = self:getBlockOffsets()
+	for index, offset in pairs(offsets) do
+		local new_offset = {x = self.position.x + offset.x, y = self.position.y + offset.y}
+		if new_offset.x == x and new_offset.y == y then
+			return true
+		end
+	end
+	return false
+end
+
+function PieceRev:isMoveBlocked(grid, offset)
+	local moved_piece = self:withOffset(offset)
+	return not grid:canPlacePiece(moved_piece)
+end
+
+function PieceRev:isDropBlocked(grid)
+	return self:isMoveBlocked(grid, { x=0, y=1 })
+end
+
+-- Procedures to actually do stuff to pieces.
+
+function PieceRev:setOffset(offset)
+	self.position.x = self.position.x + offset.x
+	self.position.y = self.position.y + offset.y
+	return self
+end
+
+function PieceRev:setRelativeRotation(rot)
+	new_rot = self.rotation + rot
+	while new_rot < 0 do new_rot = new_rot + 4 end
+	while new_rot >= 4 do new_rot = new_rot - 4 end
+	self.rotation = new_rot
+	return self
+end
+
+function PieceRev:moveInGrid(step, squares, grid, instant)
+	local moved = false
+	for x = 1, squares do
+		if grid:canPlacePiece(self:withOffset(step)) then
+			moved = true
+			self:setOffset(step)
+			if instant then
+				self:dropToBottom(grid)
+			end
+		else
+			break
+		end
+	end
+	if moved and step.y == 0 then playSE("move") end
+	return self
+end
+
+function PieceRev:dropSquares(dropped_squares, grid)
+	self:moveInGrid({ x = 0, y = 1 }, dropped_squares, grid)
+end
+
+function PieceRev:dropToBottom(grid)
+	local piece_y = self.position.y
+	self:dropSquares(math.huge, grid)
+	self.gravity = 0
+	if self.position.y > piece_y then
+		if self.ghost == false then playSE("bottom") end
+		-- self.lock_delay = 0
+	end
+	return self
+end
+
+function PieceRev:lockIfBottomed(grid)
+	if self:isDropBlocked(grid) then
+		self.locked = true
+	end
+	return self
+end
+
+function PieceRev:addGravity(gravity, grid, classic_lock)
+	gravity = gravity / (self.big and 2 or 1)
+	local new_gravity = self.gravity + gravity
+	if self:isDropBlocked(grid) then
+		if classic_lock then
+			self.gravity = new_gravity
+		else
+			self.gravity = 0
+			self.lock_delay = self.lock_delay + 1
+		end
+	elseif not (
+		self:isMoveBlocked(grid, { x=0, y=-1 }) and gravity < 0
+	) then
+		local dropped_squares = math.floor(math.abs(new_gravity))
+		if gravity >= 0 then
+			local new_frac_gravity = new_gravity - dropped_squares
+			self.gravity = new_frac_gravity
+			self:dropSquares(dropped_squares, grid)
+			if self:isDropBlocked(grid) then
+				playSE("bottom")
+			end
+		else
+			local new_frac_gravity = new_gravity + dropped_squares
+			self.gravity = new_frac_gravity
+			self:moveInGrid({ x=0, y=-1 }, dropped_squares, grid)
+			if self:isMoveBlocked(grid, { x=0, y=-1 }) then
+				playSE("bottom")
+			end
+		end
+	else
+		self.gravity = 0
+	end
+	return self
+end
+
+-- Procedures for drawing.
+
+function PieceRev:draw(opacity, brightness, grid, partial_das)
+	if opacity == nil then opacity = 1 end
+	if brightness == nil then brightness = 1 end
+	love.graphics.setColor(brightness, brightness, brightness, opacity)
+	local offsets = self:getBlockOffsets()
+	local gravity_offset = 0
+	if config.gamesettings.smooth_movement == 1 and 
+	   grid ~= nil and not self:isDropBlocked(grid) then
+		gravity_offset = self.gravity * 16
+	end
+	if partial_das == nil then partial_das = 0 end
+	for index, offset in pairs(offsets) do
+		local x = 10 - (self.position.x + offset.x) - 1
+		local y = 24 - (self.position.y + offset.y) + 3
+        -- local x = self.position.x + offset.x
+		-- local y = self.position.y + offset.y
+		if self.big then
+			love.graphics.draw(
+				blocks[self.skin][self.colour],
+				64+x*32+partial_das*2, 16+y*32+gravity_offset*2,
+				0, 2, 2
+			)
+		else
+			love.graphics.draw(
+				blocks[self.skin][self.colour],
+				64+x*16+partial_das, 16+y*16+gravity_offset
+			)
+		end
+	end
+    return false
+end
+
+function PieceRev:drawRev(opacity, brightness, grid, partial_das)
+    return self:draw(opacity, brightness, grid, partial_das)
+end
+
+return PieceRev
