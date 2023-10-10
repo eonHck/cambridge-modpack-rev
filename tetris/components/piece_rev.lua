@@ -168,18 +168,16 @@ function PieceRev:draw(opacity, brightness, grid, partial_das)
 	for index, offset in pairs(offsets) do
 		local x = 10 - (self.position.x + offset.x) - 1
 		local y = 24 - (self.position.y + offset.y) + 3
-        -- local x = self.position.x + offset.x
-		-- local y = self.position.y + offset.y
 		if self.big then
 			love.graphics.draw(
 				blocks[self.skin][self.colour],
-				64+x*32+partial_das*2, 16+y*32+gravity_offset*2,
+				64+x*32+partial_das*2, 16+y*32-gravity_offset*2,
 				0, 2, 2
 			)
 		else
 			love.graphics.draw(
 				blocks[self.skin][self.colour],
-				64+x*16+partial_das, 16+y*16+gravity_offset
+				64+x*16+partial_das, 16+y*16-gravity_offset
 			)
 		end
 	end
