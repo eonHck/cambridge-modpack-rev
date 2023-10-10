@@ -5,7 +5,7 @@ Repository for custom rev modes in [Cambridge](https://github.com/MillaBasset/ca
 Original repository for custom rev modes in Cambridge, availabe [here](https://github.com/MillaBasset/cambridge-modpack).
 
 ## How to use
-Download the source code ZIP from [here](https://github.com/eonHck/cambridge-modpack-rev/releases/download/v0.0.1/cambridge-revmodpack.zip).
+Download the source code ZIP from [here](https://github.com/eonHck/cambridge-modpack-rev/releases/download/v0.0.2/cambridge-revmodpack.zip).
 
 Once done, extract the `tetris` folder into one of these directories, depending on how you're running Cambridge
 (create any folders that don't exist!):  
